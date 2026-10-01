@@ -141,15 +141,41 @@ async function refresh() {
   }
 }
 
+// the server times the run from here, so this has to happen when play begins
+// rather than at game over. kept as a promise so a slow request does not hold
+// up the game, submit waits on it instead
+let currentRunRequest = null;
+
+function startRun() {
+  if (!isConfigured || playerName === null) return;
+
+  currentRunRequest = callSupabase("start_run", { player: playerId }).catch((requestError) => {
+    console.error(requestError);
+    return null;
+  });
+}
+
 async function submit(score) {
   if (!isConfigured || playerName === null) return;
-  if (!Number.isFinite(score) || score <= 0) return;
+
+  // a run is single use on the server, so let go of it before anything else
+  const runRequest = currentRunRequest;
+  currentRunRequest = null;
+
+  if (!Number.isFinite(score) || score <= 0 || runRequest === null) return;
+
+  const runId = await runRequest;
+  if (runId === null) {
+    setNote("score could not be saved (the leaderboard was unreachable when this game started).");
+    return;
+  }
 
   try {
     await callSupabase("submit_score", {
       player: playerId,
       player_name: playerName,
-      new_score: Math.floor(score)
+      new_score: Math.floor(score),
+      run: runId
     });
   } catch (requestError) {
     setNote(`score could not be saved (${requestError.message}).`);
@@ -181,7 +207,7 @@ function needsName() {
   return isConfigured && playerName === null;
 }
 
-window.Leaderboard = { needsName, submit, refresh };
+window.Leaderboard = { needsName, startRun, submit, refresh };
 
 if (isConfigured) {
   leaderboardSection.classList.remove("hidden");

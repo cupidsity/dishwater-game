@@ -305,6 +305,8 @@ function startGame() {
 
   backgroundMusic.currentTime = 0;
   playMusic();
+
+  if (window.Leaderboard) window.Leaderboard.startRun();
 }
 
 function endGame() {
